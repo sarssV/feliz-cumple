@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>¡Feliz Cumpleaños!</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #faf9f6;
+            color: #2d3748;
+            overflow-x: hidden;
+        }
+
+        .font-serif-title {
+            font-family: 'Playfair Display', serif;
+        }
+
+        /* Perspective for 3D card flips */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+
+        .transform-style-3d {
+            transform-style: preserve-3d;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+
+        /* Envelope Styles */
+        .envelope-wrapper {
+            perspective: 1000px;
+        }
+
+        .flap {
+            transform-origin: top;
+            transition: transform 0.6s ease-in-out, z-index 0.6s ease-in-out;
+        }
+
+        .flap.open {
+            transform: rotateX(180deg);
+            z-index: 0 !important;
+        }
+
+        .letter-preview {
+            transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.6s ease;
+        }
+
+        .letter-preview.slide-up {
+            transform: translateY(-120px) scale(1.05);
+        }
+
+        /* Soft Glassmorphism */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(229, 231, 235, 0.7);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-stone-200">
+
+    <!-- Top Action Bar (Controls) -->
+    <header class="fixed top-4 right-4 z-50 flex items-center gap-2">
+        <button id="musicToggleBtn" onclick="toggleAudio()" class="p-3 bg-white/80 backdrop-blur-md hover:bg-white text-stone-700 rounded-full shadow-sm border border-stone-200 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 text-xs font-medium" title="Música de ambiente">
+            <i data-lucide="music" class="w-4 h-4"></i>
+            <span id="musicStatusText" class="hidden sm:inline">Música</span>
+        </button>
+        
+        <button onclick="toggleEditModal()" class="p-3 bg-white/80 backdrop-blur-md hover:bg-white text-stone-700 rounded-full shadow-sm border border-stone-200 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 text-xs font-medium" title="Editar Contenido">
+            <i data-lucide="edit-3" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Editar</span>
+        </button>
+    </header>
+
+    <!-- Intro Screen: Interactive Envelope -->
+    <div id="envelopeScreen" class="fixed inset-0 z-40 bg-stone-100/90 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-opacity duration-700">
+        <div class="text-center mb-8 animate-fade-in">
+            <span class="text-xs uppercase tracking-widest text-stone-400 font-semibold mb-2 block">Un detalle especial</span>
+            <h1 class="text-3xl md:text-4xl font-serif-title text-stone-800 font-medium">Para alguien muy genial</h1>
+            <p class="text-stone-500 text-sm mt-2">Toca el sobre para descubrir la sorpresa</p>
+        </div>
+
+        <!-- Envelope Graphic Structure -->
+        <div class="envelope-wrapper relative w-80 sm:w-96 h-56 cursor-pointer group" onclick="openEnvelope()">
+            <!-- Envelope Back Wall -->
+            <div class="absolute inset-0 bg-stone-200 rounded-2xl shadow-xl border border-stone-300/50"></div>
+            
+            <!-- Letter inside envelope -->
+            <div id="envelopeLetter" class="letter-preview absolute inset-x-4 top-3 bottom-3 bg-white rounded-xl shadow-md p-6 flex flex-col items-center justify-center text-center border border-stone-100 z-10">
+                <i data-lucide="sparkles" class="w-8 h-8 text-amber-500 mb-2 animate-bounce"></i>
+                <p class="font-serif-title text-xl text-stone-800 italic" id="previewRecipient">¡Feliz Cumpleaños!</p>
+                <span class="text-xs text-stone-400 mt-2">Haz clic para desplegar</span>
+            </div>
+
+            <!-- Envelope Pocket (Front Bottom/Sides) -->
+            <div class="absolute inset-0 bg-stone-100 rounded-2xl z-20 pointer-events-none border-t border-white/60 shadow-inner" style="clip-path: polygon(0 0, 50% 50%, 100% 0, 100% 100%, 0 100%);"></div>
+
+            <!-- Envelope Flap (Top) -->
+            <div id="envelopeFlap" class="flap absolute inset-x-0 top-0 h-28 bg-stone-200/90 rounded-t-2xl border-b border-stone-300/40 z-30 pointer-events-none shadow-sm" style="clip-path: polygon(0 0, 50% 100%, 100% 0);"></div>
+
+            <!-- Wax Seal / Button -->
+            <div id="waxSeal" class="absolute left-1/2 top-28 -translate-x-1/2 -translate-y-1/2 z-40 bg-stone-800 group-hover:bg-stone-900 text-amber-100 w-12 h-12 rounded-full flex items-center justify-center shadow-md transition-transform group-hover:scale-110">
+                <i data-lucide="heart" class="w-5 h-5 fill-amber-100/20"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Interactive Content Container -->
+    <main id="mainContent" class="max-w-3xl mx-auto px-4 py-12 md:py-16 opacity-0 transition-opacity duration-1000 w-full">
+        
+        <!-- Header Banner -->
+        <section class="text-center mb-12">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-200/60 text-stone-600 text-xs tracking-wider uppercase font-medium mb-4">
+                <i data-lucide="cake" class="w-3.5 h-3.5"></i> Celebración Especial
+            </div>
+            <h1 class="text-4xl md:text-6xl font-serif-title font-medium text-stone-800 mb-3 tracking-tight">
+                ¡Feliz Cumple <span id="displayFriendName" class="italic text-stone-600">Amigo</span>!
+            </h1>
+            <p class="text-stone-500 text-sm md:text-base max-w-md mx-auto">
+                Diseñado con mucho cariño para festejar tu día. Explora cada sección a continuación.
+            </p>
+        </section>
+
+        <!-- Main Letter Card -->
+        <section class="mb-12">
+            <div class="glass-card rounded-3xl p-6 md:p-10 shadow-sm relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-amber-100/40 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+                <div class="flex items-center gap-3 mb-6 border-b border-stone-200/60 pb-4">
+                    <div class="w-10 h-10 rounded-2xl bg-stone-800 text-white flex items-center justify-center shadow-sm">
+                        <i data-lucide="mail-open" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-serif-title text-xl font-medium text-stone-800">Carta Especial</h2>
+                        <span class="text-xs text-stone-400">Lee con calma</span>
+                    </div>
+                </div>
+
+                <div id="letterText" class="text-stone-600 leading-relaxed space-y-4 text-base font-normal">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <div class="mt-8 pt-4 border-t border-stone-200/60 flex items-center justify-between text-xs text-stone-400 italic">
+                    <span id="letterSignature">— De parte de tu amiga</span>
+                    <i data-lucide="sparkle" class="w-4 h-4 text-amber-500"></i>
+                </div>
+            </div>
+        </section>
+
+        <!-- Memory Cards Section (Recuerdos) -->
+        <section class="mb-12">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="font-serif-title text-2xl font-medium text-stone-800">Recuerdos Top</h2>
+                    <p class="text-xs text-stone-400 mt-0.5">Haz clic en cada tarjeta para voltearla</p>
+                </div>
+                <span class="text-xs bg-stone-100 px-2.5 py-1 rounded-full text-stone-500">3 Momentos</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="memoriesGrid">
+                <!-- Memory items render here -->
+            </div>
+        </section>
+
+        <!-- Interactive Gift Coupons (Vales) -->
+        <section class="mb-12">
+            <div class="mb-6">
+                <h2 class="font-serif-title text-2xl font-medium text-stone-800">Vales de Regalo</h2>
+                <p class="text-xs text-stone-400 mt-0.5">Haz clic en un vale para canjearlo cuando quieras</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="couponsGrid">
+                <!-- Coupons render here -->
+            </div>
+        </section>
+
+        <!-- Final Interactive Toast / Wish Button -->
+        <section class="text-center bg-stone-800 text-stone-100 rounded-3xl p-8 shadow-md relative overflow-hidden">
+            <div class="relative z-10">
+                <h3 class="font-serif-title text-2xl font-medium mb-2">¿Listos para festejar?</h3>
+                <p class="text-stone-300 text-sm max-w-sm mx-auto mb-6">Presiona el botón para lanzar una lluvia de mejores deseos.</p>
+                <button onclick="triggerConfetti()" class="px-6 py-3 bg-amber-400 hover:bg-amber-300 text-stone-900 rounded-full font-medium text-sm transition-all transform hover:scale-105 active:scale-95 shadow-md flex items-center gap-2 mx-auto">
+                    <i data-lucide="party-popper" class="w-4 h-4"></i> ¡Brindar por ti!
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-6 text-xs text-stone-400 border-t border-stone-200/50 mt-12">
+        Creado con <i data-lucide="heart" class="w-3 h-3 inline text-red-400 fill-red-400 mx-0.5"></i> para un cumpleaños inolvidable.
+    </footer>
+
+    <!-- Edit Modal (Easy Personalization) -->
+    <div id="editModal" class="fixed inset-0 z-50 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-4 border-b border-stone-100 mb-4">
+                <h3 class="font-serif-title text-lg font-medium text-stone-800">Personalizar Carta</h3>
+                <button onclick="toggleEditModal()" class="text-stone-400 hover:text-stone-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-medium text-stone-700 mb-1">Nombre del Amigo/a</label>
+                    <input type="text" id="editFriendName" class="w-full px-3 py-2 rounded-xl border border-stone-200 focus:outline-none focus:border-stone-400">
+                </div>
+                <div>
+                    <label class="block font-medium text-stone-700 mb-1">Tu Firma / Nombre</label>
+                    <input type="text" id="editSignature" class="w-full px-3 py-2 rounded-xl border border-stone-200 focus:outline-none focus:border-stone-400">
+                </div>
+                <div>
+                    <label class="block font-medium text-stone-700 mb-1">Mensaje de la Carta (párrafos separados por salto de línea)</label>
+                    <textarea id="editLetterBody" rows="5" class="w-full px-3 py-2 rounded-xl border border-stone-200 focus:outline-none focus:border-stone-400"></textarea>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button onclick="toggleEditModal()" class="px-4 py-2 rounded-full border border-stone-200 text-stone-600 hover:bg-stone-50 text-xs">Cancelar</button>
+                <button onclick="saveCardEdits()" class="px-4 py-2 rounded-full bg-stone-800 text-white hover:bg-stone-900 text-xs font-medium">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Default Editable Content Data
+        let cardData = {
+            friendName: "Carlos",
+            signature: "De parte de tu mejor amiga",
+            letter: [
+                "¡Muy feliz cumpleaños! En este día tan especial quería dejarte este pequeño detalle digital para recordarte lo mucho que valoro nuestra amistad.",
+                "Gracias por cada risa, por las pláticas interminables y por estar siempre presente en las buenas y en las no tan buenas. Espero que este nuevo año de vida venga cargado de éxitos, viajes, salud y momentos increíbles.",
+                "¡Que disfrutes mucho tu día! Un abrazo enorme."
+            ],
+            memories: [
+                {
+                    title: "La anécdota inolvidable",
+                    icon: "smile",
+                    desc: "Aquel viaje/salida donde nos perdimos y terminó siendo el mejor día de todos."
+                },
+                {
+                    title: "Chiste Local",
+                    icon: "zap",
+                    desc: "Esa frase o meme que nadie más entiende pero a nosotros nos causa risa siempre."
+                },
+                {
+                    title: "El mejor consejo",
+                    icon: "coffee",
+                    desc: "Todas esas pláticas con café de por medio arreglando el mundo."
+                }
+            ],
+            coupons: [
+                { id: 1, title: "Vale por una Salida / Café", icon: "coffee", redeemed: false },
+                { id: 2, title: "Vale por unos Tacos o Cerveza", icon: "utensils", redeemed: false },
+                { id: 3, title: "Vale por un Pase de Cine / Maratón", icon: "film", redeemed: false },
+                { id: 4, title: "Vale por Escuchar tu Rant sin Límite", icon: "message-circle", redeemed: false }
+            ]
+        };
+
+        // Initialize Web Audio API Synth for soft background melody
+        let audioCtx = null;
+        let isPlayingAudio = false;
+        let audioInterval = null;
+
+        document.addEventListener("DOMContentLoaded", () => {
+            renderContent();
+            lucide.createIcons();
+        });
+
+        function renderContent() {
+            // Header & Letter
+            document.getElementById("previewRecipient").innerText = `¡Feliz Cumple, ${cardData.friendName}!`;
+            document.getElementById("displayFriendName").innerText = cardData.friendName;
+            document.getElementById("letterSignature").innerText = `— ${cardData.signature}`;
+
+            const letterContainer = document.getElementById("letterText");
+            letterContainer.innerHTML = cardData.letter.map(p => `<p>${p}</p>`).join("");
+
+            // Memories Cards Grid
+            const memoriesGrid = document.getElementById("memoriesGrid");
+            memoriesGrid.innerHTML = cardData.memories.map((m, idx) => `
+                <div class="perspective-1000 h-44 cursor-pointer" onclick="flipMemoryCard(${idx})">
+                    <div id="memoryCard-${idx}" class="transform-style-3d relative w-full h-full rounded-2xl">
+                        <!-- Front side -->
+                        <div class="backface-hidden absolute inset-0 glass-card rounded-2xl p-5 flex flex-col justify-between border border-stone-200/70 shadow-sm hover:shadow-md transition-shadow">
+                            <div class="w-8 h-8 rounded-xl bg-stone-100 text-stone-700 flex items-center justify-center">
+                                <i data-lucide="${m.icon}" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-serif-title font-medium text-stone-800 text-base mb-1">${m.title}</h3>
+                                <span class="text-[11px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">Toca para descubrir</span>
+                            </div>
+                        </div>
+                        <!-- Back side -->
+                        <div class="backface-hidden rotate-y-180 absolute inset-0 bg-stone-800 text-stone-100 rounded-2xl p-5 flex items-center justify-center text-center shadow-md">
+                            <p class="text-xs leading-relaxed text-stone-200">${m.desc}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join("");
+
+            // Coupons Grid
+            const couponsGrid = document.getElementById("couponsGrid");
+            couponsGrid.innerHTML = cardData.coupons.map(c => `
+                <div onclick="redeemCoupon(${c.id})" class="p-4 rounded-2xl border ${c.redeemed ? 'bg-stone-100 border-dashed border-stone-300 opacity-60' : 'bg-white border-stone-200 hover:border-amber-300 shadow-sm hover:shadow'} transition-all cursor-pointer flex items-center justify-between group">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl ${c.redeemed ? 'bg-stone-200 text-stone-500' : 'bg-amber-50 text-amber-700'} flex items-center justify-center">
+                            <i data-lucide="${c.redeemed ? 'check' : c.icon}" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-stone-800 text-sm ${c.redeemed ? 'line-through text-stone-400' : ''}">${c.title}</h4>
+                            <span class="text-[11px] text-stone-400">${c.redeemed ? '¡Canjeado!' : 'Clic para canjear'}</span>
+                        </div>
+                    </div>
+                    <div class="text-xs ${c.redeemed ? 'text-stone-400' : 'text-amber-600 group-hover:translate-x-1'} transition-transform font-medium">
+                        ${c.redeemed ? 'Usado' : 'Canjear →'}
+                    </div>
+                </div>
+            `).join("");
+
+            lucide.createIcons();
+        }
+
+        function openEnvelope() {
+            const flap = document.getElementById("envelopeFlap");
+            const letter = document.getElementById("envelopeLetter");
+            const seal = document.getElementById("waxSeal");
+            const envelopeScreen = document.getElementById("envelopeScreen");
+            const mainContent = document.getElementById("mainContent");
+
+            // Animate Flap
+            flap.classList.add("open");
+            seal.style.opacity = "0";
+
+            setTimeout(() => {
+                letter.classList.add("slide-up");
+            }, 300);
+
+            // Trigger celebratory confetti burst
+            setTimeout(() => {
+                confetti({
+                    particleCount: 70,
+                    spread: 60,
+                    origin: { y: 0.6 },
+                    colors: ['#f59e0b', '#d97706', '#78350f', '#fef3c7']
+                });
+            }, 600);
+
+            // Fade out overlay and reveal main card
+            setTimeout(() => {
+                envelopeScreen.classList.add("opacity-0", "pointer-events-none");
+                mainContent.classList.remove("opacity-0");
+            }, 1400);
+        }
+
+        function flipMemoryCard(index) {
+            const card = document.getElementById(`memoryCard-${index}`);
+            card.classList.toggle("rotate-y-180");
+        }
+
+        function redeemCoupon(id) {
+            const coupon = cardData.coupons.find(c => c.id === id);
+            if (coupon && !coupon.redeemed) {
+                coupon.redeemed = true;
+                renderContent();
+
+                // Sparkle Effect
+                confetti({
+                    particleCount: 40,
+                    spread: 50,
+                    origin: { y: 0.7 },
+                    colors: ['#f59e0b', '#10b981', '#3b82f6']
+                });
+            }
+        }
+
+        function triggerConfetti() {
+            confetti({
+                particleCount: 100,
+                spread: 80,
+                origin: { y: 0.6 }
+            });
+        }
+
+        function toggleAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+
+            const btnText = document.getElementById("musicStatusText");
+
+            if (isPlayingAudio) {
+                clearInterval(audioInterval);
+                isPlayingAudio = false;
+                if (btnText) btnText.innerText = "Música";
+            } else {
+                isPlayingAudio = true;
+                if (btnText) btnText.innerText = "Pausar";
+                
+                // Play soft pentatonic melody
+                const notes = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25]; // C, D, E, G, A, C
+                let noteIdx = 0;
+
+                audioInterval = setInterval(() => {
+                    if (!isPlayingAudio) return;
+                    
+                    let osc = audioCtx.createOscillator();
+                    let gain = audioCtx.createGain();
+                    
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(notes[noteIdx % notes.length], audioCtx.currentTime);
+                    
+                    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 1.2);
+
+                    noteIdx = (noteIdx + Math.floor(Math.random() * 3) + 1) % notes.length;
+                }, 400);
+            }
+        }
+
+        function toggleEditModal() {
+            const modal = document.getElementById("editModal");
+            if (modal.classList.contains("hidden")) {
+                document.getElementById("editFriendName").value = cardData.friendName;
+                document.getElementById("editSignature").value = cardData.signature;
+                document.getElementById("editLetterBody").value = cardData.letter.join("\n\n");
+                modal.classList.remove("hidden");
+            } else {
+                modal.classList.add("hidden");
+            }
+        }
+
+        function saveCardEdits() {
+            const friendName = document.getElementById("editFriendName").value.trim();
+            const signature = document.getElementById("editSignature").value.trim();
+            const letterText = document.getElementById("editLetterBody").value.trim();
+
+            if (friendName) cardData.friendName = friendName;
+            if (signature) cardData.signature = signature;
+            if (letterText) cardData.letter = letterText.split("\n\n").filter(p => p.trim().length > 0);
+
+            renderContent();
+            toggleEditModal();
+        }
+    </script>
+</body>
+</html>
